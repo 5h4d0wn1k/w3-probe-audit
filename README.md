@@ -33,8 +33,15 @@ python3 firmware/probe_audit.py
 ## Usage
 
 ```bash
-# Run offline demo with embedded probe records
-python3 firmware/probe_audit.py
+# Run the synthetic probe-privacy audit (byte-exact frame corpus)
+python3 firmware/probe_audit.py --source synthetic --json reports/w3.json
+
+# Write the probe corpus to a pcap fixture, then re-audit from the fixture
+python3 firmware/probe_audit.py --write-pcap reports/probes.pcap
+python3 firmware/probe_audit.py --source pcap --pcap reports/probes.pcap
+
+# Byte-exact unit tests
+python3 -m unittest discover -s tests
 ```
 
 ```python
@@ -114,7 +121,7 @@ This project is provided for **educational and authorized security testing purpo
 - Tracking individuals' movements via probe requests without authorization
 - Using captured probe data for commercial surveillance
 - Any activity that violates applicable privacy laws or regulations
-- Commercial use without proper licensing
+- Collecting probe frames from networks you do not own or are not authorized to audit
 
 ### No Warranty
 This software is provided "AS IS" without warranty of any kind. The author is not responsible for any misuse or damage caused by this software.
@@ -124,6 +131,38 @@ If you discover vulnerabilities using this tool, follow responsible disclosure p
 1. Report to the vendor/owner privately
 2. Allow reasonable time for remediation
 3. Do not exploit beyond proof of concept
+
+## Live Lab Test Plan
+
+This repo is a byte-level engine + simulation tool: probe-request frames are *built* and *parsed*
+offscreen — no capture, no radio.
+
+Offline (this repo, no radio):
+1. `python3 firmware/probe_audit.py --source synthetic --json reports/w3.json` — build 11
+   byte-exact probe frames across 3 synthetic devices, cluster them, print the leak scorecard
+   (exit 0), inspect `reports/`.
+2. `python3 -m unittest discover -s tests` — byte-exact unit tests pass (exit 0).
+3. `python3 firmware/probe_audit.py --source pcap --pcap reports/probes.pcap` — after running
+   with `--write-pcap reports/probes.pcap`, re-audit from the fixture and confirm identical
+   results (deterministic round-trip).
+
+Authorized lab (only with capture rights + written scope):
+4. On a network you own, capture real probe requests with a monitor-mode NIC, convert them to
+   a pcap, and feed them to `--source pcap`. Confirm the clustering collapses rotated MACs to
+   physical devices as the synthetic corpus does.
+5. `green = permitted`: only ever analyze frames captured with the owner's written
+   authorization; never track a specific individual's device without consent.
+
+## Metrics
+
+- Frame type engineered byte-exact: probe request (management subtype 4)
+- Collection corpus: 3 devices, 11 frames; device-C models MAC reuse (randomization failure)
+- pcap write/read round-trip: synthetic corpus -> fixture -> identical parse
+- Clustering: by IE-blob fingerprint + SSID; leak score 0-100, mitigation tiering
+- Deterministic offline: all frame bytes from builders; no wall-clock randomness
+
+- Test suite: `python3 -m unittest discover -s tests`
+- Reports: `reports/` (gitignored)
 
 ## License
 
